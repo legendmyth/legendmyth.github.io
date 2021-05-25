@@ -1,1 +1,196 @@
-hello
+﻿<!DOCTYPE html>
+
+<html>
+
+	<head>
+		<title>水滴</title>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<script type="text/javascript" src="js/dat.gui.min.js"></script>
+		<script type="text/javascript" src="js/three.min.js"></script>
+		<script type="text/javascript" src="js/stats.min.js"></script>
+		<script type="text/javascript" src="js/SceneUtils.js"></script>
+		<script type="text/javascript" src="js/OrbitControls.js"></script>
+		<style>
+			body {
+				margin: 0;
+				overflow: hidden;
+			}
+			
+			.control {
+				color: #666666;
+				text-decoration: none;
+				/*超链接无下划线*/
+			}
+		</style>
+	</head>
+
+	<body>
+		<div id="info" style="position: absolute;top:0px;left: 150px;color: #999999;display: none;">水滴头部太尖,暂时未处理,右侧可调整水滴的各项参数</div>
+		<div id="info" style="position: absolute;top:20px;left: 150px;color: #999999;">
+			<span><a href="javascript:ChangeSence()" class="control">切换场景</a></span>
+			<span><a href="javascript:StopRo()" class="control" id="stopRo">停止旋转</a></span>
+		</div>
+		<div id="Stats-output">
+		</div>
+		<div id="WebGL-output">
+		</div>
+		<script type="text/javascript">
+			var roStep = 0.01; //旋转步长
+			var radom = 1;
+			var spGroup;
+			var latheMesh;
+			var mctrl;
+			var stats = initStats();
+			var scene = new THREE.Scene();
+			var textureCube = new THREE.CubeTextureLoader()
+				.setPath('img/box1/')
+				.load(['nx.png', 'px.png', 'ny.png', 'py.png', 'nz.png', 'pz.png']);
+			scene.background = this.textureCube;
+
+			var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+			var webGLRenderer = new THREE.WebGLRenderer();
+			webGLRenderer.setClearColor(new THREE.Color(0x000000, 0.0));
+			webGLRenderer.setSize(window.innerWidth, window.innerHeight);
+
+			mctrl = new THREE.OrbitControls(camera, webGLRenderer.domElement);
+			mctrl.addEventListener('change', webGLRenderer);
+			mctrl.enableZoom = true;
+			mctrl.enablePan = true;
+
+			webGLRenderer.shadowMapEnabled = true;
+			camera.position.x = -60;
+			camera.position.y = 80;
+			camera.position.z = 100;
+			camera.lookAt(new THREE.Vector3(10, 0, 0));
+			document.getElementById("WebGL-output").appendChild(webGLRenderer.domElement);
+			var step = 0;
+
+			generatePoints(50, 2, 2 * Math.PI, 30, 5, 40, 40,1,1);
+			var controls = new function() {
+				this.segments = 100;
+				this.phiStart = 0;
+				this.phiLength = 2 * Math.PI;
+				this.a = 30;
+				this.b = 5;
+				this.r = 40;
+				this.u = 40;
+				this.xRate=1;
+				this.yRate=1;
+				this.redraw = function() {
+					scene.remove(spGroup);
+					scene.remove(latheMesh);
+					generatePoints(controls.segments, controls.phiStart, controls.phiLength, controls.a, controls.b, controls.r, controls.u,controls.xRate,controls.yRate);
+				};
+			};
+			var gui = new dat.GUI();
+			gui.add(controls, 'a', 0, 50).onChange(controls.redraw);
+			gui.add(controls, 'b', 0, 50).onChange(controls.redraw);
+			gui.add(controls, 'r', 0, 50).onChange(controls.redraw);
+			gui.add(controls, 'u', 0, 50).onChange(controls.redraw);
+			gui.add(controls, 'xRate', 0, 10).onChange(controls.redraw);
+			gui.add(controls, 'yRate', 0, 10).onChange(controls.redraw);
+
+			render();
+
+			function generatePoints(segments, phiStart, phiLength, a, b, r, u,xRate,yRate) {
+				var points = [];
+				for(var i = -a; i < 2;) {
+					var y = i*yRate;
+					var x = xRate*b*Math.sqrt((Math.pow(a, 2) - Math.pow(i, 2))) * (Math.exp((u - i) / r) - Math.exp((u - 2) / r)) / a;
+					var point = new THREE.Vector2(x, y);
+					points.push(point);
+					
+//					var nextx = xRate*b*Math.sqrt((Math.pow(a, 2) - Math.pow(i+0.01, 2))) * (Math.exp((u - (i+0.01)) / r) - Math.exp((u - 2) / r)) / a;
+//					if(x-nextx>0.3||nextx-x>0.3)
+//					{
+//						i=i+0.005;
+//					}
+//					else
+//					{
+//						i=i+0.01;
+//					}
+					if(i<-a+a/5)
+					{
+						i = i + 0.01;
+					}
+					else
+					{
+						i=i+0.1;
+					}
+					//console.log(i,x, y);
+				}
+				console.log("points count：",points.length);
+				spGroup = new THREE.Object3D();
+				var material = new THREE.MeshBasicMaterial({
+					color: 0xEEEEEE,
+					transparent: true
+				});
+				points.forEach(function(point) {
+					var spGeom = new THREE.SphereGeometry(0.01);
+					var spMesh = new THREE.Mesh(spGeom, material);
+					spMesh.position.copy(point);
+					spGroup.add(spMesh);
+				});
+				scene.add(spGroup);
+
+				var latheGeometry = new THREE.LatheGeometry(points, segments, phiStart, phiLength);
+				latheMesh = createMesh(latheGeometry);
+				scene.add(latheMesh);
+			}
+
+			function createMesh(geom) {
+				var meshMaterial = new THREE.MeshBasicMaterial({
+					color: 0xffffff,
+					envMap: scene.background
+				});
+				var mesh = THREE.SceneUtils.createMultiMaterialObject(geom, [meshMaterial]);
+				return mesh;
+			}
+
+			function render() {
+				stats.update();
+
+				spGroup.rotation.x = step;
+				latheMesh.rotation.z = step += roStep;
+				requestAnimationFrame(render);
+				webGLRenderer.render(scene, camera);
+			}
+
+			function initStats() {
+
+				var stats = new Stats();
+				stats.setMode(0); // 0: fps, 1: ms
+
+				stats.domElement.style.position = 'absolute';
+				stats.domElement.style.left = '0px';
+				stats.domElement.style.top = '0px';
+
+				document.getElementById("Stats-output").appendChild(stats.domElement);
+
+				return stats;
+			}
+
+			function StopRo() {
+				if(this.roStep == 0) {
+					this.roStep = 0.01;
+					document.getElementById("stopRo").innerText = "停止旋转"
+				} else {
+					this.roStep = 0;
+					document.getElementById("stopRo").innerText = "继续旋转"
+				}
+			}
+
+			function ChangeSence() {
+				this.textureCube = new THREE.CubeTextureLoader()
+					.setPath("img/box" + (radom % 16 + 1) + "/")
+					.load(['nx.png', 'px.png', 'ny.png', 'py.png', 'nz.png', 'pz.png']);
+				scene.background = textureCube;
+				scene.remove(spGroup);
+				scene.remove(latheMesh);
+				generatePoints(controls.segments, controls.phiStart, controls.phiLength, controls.a, controls.b, controls.r, controls.u, controls.xRate, controls.yRate);
+				radom++;
+			}
+		</script>
+	</body>
+
+</html>
